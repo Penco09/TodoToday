@@ -50,6 +50,14 @@
         input[type="checkbox"] { margin-right: 15px; accent-color: var(--accent); }
         .meta { color: #666; font-size: 0.8rem; margin-top: 30px; }
     </style>
+
+    <link rel="manifest" href="manifest.json">
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js');
+  }
+</script>
+
 </head>
 <body>
 
