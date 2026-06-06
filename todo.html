@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ephemeral Todo</title>
+    <style>
+        :root {
+            --bg: #121212;
+            --fg: #e0e0e0;
+            --accent: #ff5555;
+            --border: #333333;
+        }
+        body {
+            background-color: var(--bg);
+            color: var(--fg);
+            font-family: monospace;
+            max-width: 500px;
+            margin: 40px auto;
+            padding: 20px;
+        }
+        h1 { font-size: 1.5rem; border-bottom: 2px solid var(--border); padding-bottom: 10px; }
+        .input-group { display: flex; margin-bottom: 20px; }
+        input[type="text"] {
+            flex-grow: 1;
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--fg);
+            padding: 8px;
+            font-family: monospace;
+        }
+        input[type="text"]:focus { outline: 1px solid var(--accent); }
+        button {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--fg);
+            padding: 8px 16px;
+            cursor: pointer;
+            font-family: monospace;
+        }
+        button:hover { border-color: var(--accent); }
+        ul { list-style: none; padding: 0; }
+        li {
+            display: flex;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px dashed var(--border);
+        }
+        li.completed span { text-decoration: line-through; color: #666; }
+        input[type="checkbox"] { margin-right: 15px; accent-color: var(--accent); }
+        .meta { color: #666; font-size: 0.8rem; margin-top: 30px; }
+    </style>
+</head>
+<body>
+
+    <h1>TODAY'S FOCUS</h1>
+    <div class="input-group">
+        <input type="text" id="todo-input" placeholder="Add a task..." autocomplete="off">
+        <button onclick="addItem()">Add</button>
+    </div>
+    <ul id="todo-list"></ul>
+    <div class="meta" id="expiry-msg"></div>
+
+    <script>
+        const EXPIRATION_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+        function checkExpiry() {
+            const lastUpdated = localStorage.getItem('todo_timestamp');
+            if (lastUpdated) {
+                const now = new Date().getTime();
+                if (now - parseInt(lastUpdated) > EXPIRATION_MS) {
+                    localStorage.removeItem('todos');
+                    localStorage.removeItem('todo_timestamp');
+                }
+            }
+        }
+
+        function loadItems() {
+            checkExpiry();
+            const list = document.getElementById('todo-list');
+            list.innerHTML = '';
+            const todos = JSON.parse(localStorage.getItem('todos')) || [];
+            
+            todos.forEach((todo, index) => {
+                const li = document.createElement('li');
+                if (todo.completed) li.classList.add('completed');
+                
+                li.innerHTML = `
+                    <input type="checkbox" ${todo.completed ? 'checked' : ''} onchange="toggleItem(${index})">
+                    <span>${todo.text}</span>
+                `;
+                list.appendChild(li);
+            });
+
+            updateMeta();
+        }
+
+        function saveItems(todos) {
+            localStorage.setItem('todos', JSON.stringify(todos));
+            // Only set a new timestamp if it's the first item being added to a blank slate
+            if (todos.length > 0 && !localStorage.getItem('todo_timestamp')) {
+                localStorage.setItem('todo_timestamp', new Date().getTime().toString());
+            } else if (todos.length === 0) {
+                localStorage.removeItem('todo_timestamp');
+            }
+        }
+
+        function addItem() {
+            const input = document.getElementById('todo-input');
+            const text = input.value.trim();
+            if (!text) return;
+
+            const todos = JSON.parse(localStorage.getItem('todos')) || [];
+            todos.push({ text, completed: false });
+            saveItems(todos);
+            input.value = '';
+            loadItems();
+        }
+
+        function toggleItem(index) {
+            const todos = JSON.parse(localStorage.getItem('todos'));
+            todos[index].completed = !todos[index].completed;
+            localStorage.setItem('todos', JSON.stringify(todos));
+            loadItems();
+        }
+
+        function updateMeta() {
+            const timestamp = localStorage.getItem('todo_timestamp');
+            const msgEl = document.getElementById('expiry-msg');
+            if (timestamp) {
+                const expiryTime = new Date(parseInt(timestamp) + EXPIRATION_MS);
+                msgEl.innerText = `List will self-destruct at: ${expiryTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+            } else {
+                msgEl.innerText = 'No active expiration timer.';
+            }
+        }
+
+        // Allow pressing Enter to add items
+        document.getElementById('todo-input').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') addItem();
+        });
+
+        // Initialize
+        loadItems();
+    </script>
+</body>
+</html>
