@@ -51,7 +51,7 @@
         .meta { color: #666; font-size: 0.8rem; margin-top: 30px; }
     </style>
 
-    <link rel="manifest" href="manifest.json">
+    <link rel="manifest" href="./manifest.json">
 <script>
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js');
@@ -148,6 +148,30 @@
             if (e.key === 'Enter') addItem();
         });
 
+        let deferredPrompt;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  // Prevent Chrome from showing the native prompt automatically
+  e.preventDefault();
+  // Stash the event so it can be triggered later.
+  deferredPrompt = e;
+  
+  // OPTIONAL: Unhide a custom "Install App" button in your UI here
+  // e.g., document.getElementById('install-btn').style.display = 'block';
+});
+
+// Call this function when a user clicks your custom install button
+function triggerInstall() {
+  if (deferredPrompt) {
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then((choiceResult) => {
+      if (choiceResult.outcome === 'accepted') {
+        console.log('User accepted the install prompt');
+      }
+      deferredPrompt = null;
+    });
+  }
+}
         // Initialize
         loadItems();
     </script>
