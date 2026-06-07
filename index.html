@@ -6,10 +6,10 @@
     <title>Ephemeral Todo</title>
     <style>
         :root {
-            --bg: #121212;
-            --fg: #e0e0e0;
-            --accent: #ff5555;
-            --border: #333333;
+            --bg: #393939;
+            --fg: #efeeee;
+            --accent: #ffad55;
+            --border: #000000;
         }
         body {
             background-color: var(--bg);
@@ -49,6 +49,28 @@
         li.completed span { text-decoration: line-through; color: #666; }
         input[type="checkbox"] { margin-right: 15px; accent-color: var(--accent); }
         .meta { color: #666; font-size: 0.8rem; margin-top: 30px; }
+        
+        .actions-group {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
+.actions-group button {
+    flex: 1;
+    font-size: 0.8rem;
+    padding: 10px;
+}
+.btn-danger:hover {
+    border-color: #ff5555;
+    background-color: rgba(255, 85, 85, 0.1);
+}
+.btn-warn:hover {
+    border-color: #ffb86c;
+    background-color: rgba(255, 184, 108, 0.1);
+}
+.frozen {
+    color: #ffb86c !important;
+}
     </style>
 
     <link rel="manifest" href="./manifest.json">
@@ -61,7 +83,7 @@
 </head>
 <body>
 
-    <h1>TODAY'S FOCUS</h1>
+    <h1>TO DO TODAY</h1>
     <div class="input-group">
         <input type="text" id="todo-input" placeholder="Add a task..." autocomplete="off">
         <button onclick="addItem()">Add</button>
@@ -69,111 +91,151 @@
     <ul id="todo-list"></ul>
     <div class="meta" id="expiry-msg"></div>
 
+    <div class="actions-group">
+        <button class="btn-warn" id="freeze-btn" onclick="toggleFreeze()">Freeze Timer</button>
+        <button class="btn-danger" onclick="destroyNow()">Destruct Now</button>
+    </div>
+
     <script>
-        const EXPIRATION_MS = 24 * 60 * 60 * 1000; // 24 hours
+const EXPIRATION_MS = 12 * 60 * 60 * 1000; // 12 hours
 
-        function checkExpiry() {
-            const lastUpdated = localStorage.getItem('todo_timestamp');
-            if (lastUpdated) {
-                const now = new Date().getTime();
-                if (now - parseInt(lastUpdated) > EXPIRATION_MS) {
-                    localStorage.removeItem('todos');
-                    localStorage.removeItem('todo_timestamp');
-                }
-            }
+function checkExpiry() {
+    // If it's frozen, don't check for expiration or wipe data
+    if (localStorage.getItem('todo_frozen') === 'true') return;
+
+    const lastUpdated = localStorage.getItem('todo_timestamp');
+    if (lastUpdated) {
+        const now = new Date().getTime();
+        if (now - parseInt(lastUpdated) > EXPIRATION_MS) {
+            wipeData();
         }
+    }
+}
 
-        function loadItems() {
-            checkExpiry();
-            const list = document.getElementById('todo-list');
-            list.innerHTML = '';
-            const todos = JSON.parse(localStorage.getItem('todos')) || [];
-            
-            todos.forEach((todo, index) => {
-                const li = document.createElement('li');
-                if (todo.completed) li.classList.add('completed');
-                
-                li.innerHTML = `
-                    <input type="checkbox" ${todo.completed ? 'checked' : ''} onchange="toggleItem(${index})">
-                    <span>${todo.text}</span>
-                `;
-                list.appendChild(li);
-            });
+function wipeData() {
+    localStorage.removeItem('todos');
+    localStorage.removeItem('todo_timestamp');
+    localStorage.removeItem('todo_frozen');
+    localStorage.removeItem('todo_remaining');
+}
 
-            updateMeta();
-        }
+function loadItems() {
+    checkExpiry();
+    const list = document.getElementById('todo-list');
+    list.innerHTML = '';
+    const todos = JSON.parse(localStorage.getItem('todos')) || [];
+    
+    todos.forEach((todo, index) => {
+        const li = document.createElement('li');
+        if (todo.completed) li.classList.add('completed');
+        
+        li.innerHTML = `
+            <input type="checkbox" ${todo.completed ? 'checked' : ''} onchange="toggleItem(${index})">
+            <span>${todo.text}</span>
+        `;
+        list.appendChild(li);
+    });
 
-        function saveItems(todos) {
-            localStorage.setItem('todos', JSON.stringify(todos));
-            // Only set a new timestamp if it's the first item being added to a blank slate
-            if (todos.length > 0 && !localStorage.getItem('todo_timestamp')) {
-                localStorage.setItem('todo_timestamp', new Date().getTime().toString());
-            } else if (todos.length === 0) {
-                localStorage.removeItem('todo_timestamp');
-            }
-        }
+    updateMeta();
+}
 
-        function addItem() {
-            const input = document.getElementById('todo-input');
-            const text = input.value.trim();
-            if (!text) return;
+function saveItems(todos) {
+    localStorage.setItem('todos', JSON.stringify(todos));
+    if (todos.length > 0 && !localStorage.getItem('todo_timestamp') && localStorage.getItem('todo_frozen') !== 'true') {
+        localStorage.setItem('todo_timestamp', new Date().getTime().toString());
+    } else if (todos.length === 0) {
+        wipeData();
+    }
+}
 
-            const todos = JSON.parse(localStorage.getItem('todos')) || [];
-            todos.push({ text, completed: false });
-            saveItems(todos);
-            input.value = '';
-            loadItems();
-        }
+function addItem() {
+    const input = document.getElementById('todo-input');
+    const text = input.value.trim();
+    if (!text) return;
 
-        function toggleItem(index) {
-            const todos = JSON.parse(localStorage.getItem('todos'));
-            todos[index].completed = !todos[index].completed;
-            localStorage.setItem('todos', JSON.stringify(todos));
-            loadItems();
-        }
+    const todos = JSON.parse(localStorage.getItem('todos')) || [];
+    todos.push({ text, completed: false });
+    saveItems(todos);
+    input.value = '';
+    loadItems();
+}
 
-        function updateMeta() {
-            const timestamp = localStorage.getItem('todo_timestamp');
-            const msgEl = document.getElementById('expiry-msg');
-            if (timestamp) {
-                const expiryTime = new Date(parseInt(timestamp) + EXPIRATION_MS);
-                msgEl.innerText = `List will self-destruct at: ${expiryTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
-            } else {
-                msgEl.innerText = 'No active expiration timer.';
-            }
-        }
+function toggleItem(index) {
+    const todos = JSON.parse(localStorage.getItem('todos'));
+    todos[index].completed = !todos[index].completed;
+    localStorage.setItem('todos', JSON.stringify(todos));
+    loadItems();
+}
 
-        // Allow pressing Enter to add items
-        document.getElementById('todo-input').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') addItem();
-        });
+// --- NEW FEATURES BELOW ---
 
-        let deferredPrompt;
+function destroyNow() {
+    if (confirm("Are you sure you want to permanently shred this list?")) {
+        wipeData();
+        loadItems();
+    }
+}
 
-window.addEventListener('beforeinstallprompt', (e) => {
-  // Prevent Chrome from showing the native prompt automatically
-  e.preventDefault();
-  // Stash the event so it can be triggered later.
-  deferredPrompt = e;
-  
-  // OPTIONAL: Unhide a custom "Install App" button in your UI here
-  // e.g., document.getElementById('install-btn').style.display = 'block';
+function toggleFreeze() {
+    const timestamp = localStorage.getItem('todo_timestamp');
+    if (!timestamp) return; // Can't freeze an empty list with no timer
+
+    const isFrozen = localStorage.getItem('todo_frozen') === 'true';
+    const freezeBtn = document.getElementById('freeze-btn');
+    const now = new Date().getTime();
+
+    if (!isFrozen) {
+        // FREEZING: Calculate remaining time left before expiration
+        const elapsed = now - parseInt(timestamp);
+        const remaining = EXPIRATION_MS - elapsed;
+
+        localStorage.setItem('todo_frozen', 'true');
+        localStorage.setItem('todo_remaining', remaining.toString());
+    } else {
+        // UNFREEZING: Recalculate a new start timestamp using the saved remaining duration
+        const remaining = parseInt(localStorage.getItem('todo_remaining')) || EXPIRATION_MS;
+        const newTimestamp = now - (EXPIRATION_MS - remaining);
+
+        localStorage.setItem('todo_frozen', 'false');
+        localStorage.setItem('todo_timestamp', newTimestamp.toString());
+        localStorage.removeItem('todo_remaining');
+    }
+    loadItems();
+}
+
+function updateMeta() {
+    const timestamp = localStorage.getItem('todo_timestamp');
+    const isFrozen = localStorage.getItem('todo_frozen') === 'true';
+    const msgEl = document.getElementById('expiry-msg');
+    const freezeBtn = document.getElementById('freeze-btn');
+
+    if (isFrozen) {
+        const remainingMs = parseInt(localStorage.getItem('todo_remaining')) || 0;
+        const mins = Math.ceil(remainingMs / (60 * 1000));
+        const hours = Math.floor(mins / 60);
+        const displayMins = mins % 60;
+
+        msgEl.innerHTML = `<span class="frozen">Timer Frozen. Time remaining: ${hours}h ${displayMins}m</span>`;
+        freezeBtn.innerText = "Unfreeze Timer";
+        freezeBtn.style.borderColor = "#ffb86c";
+    } else if (timestamp) {
+        const expiryTime = new Date(parseInt(timestamp) + EXPIRATION_MS);
+        msgEl.innerText = `List will self-destruct at: ${expiryTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+        freezeBtn.innerText = "Freeze Timer";
+        freezeBtn.style.borderColor = "";
+    } else {
+        msgEl.innerText = 'No active expiration timer.';
+        freezeBtn.innerText = "Freeze Timer";
+        freezeBtn.style.borderColor = "";
+    }
+}
+
+document.getElementById('todo-input').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') addItem();
 });
 
-// Call this function when a user clicks your custom install button
-function triggerInstall() {
-  if (deferredPrompt) {
-    deferredPrompt.prompt();
-    deferredPrompt.userChoice.then((choiceResult) => {
-      if (choiceResult.outcome === 'accepted') {
-        console.log('User accepted the install prompt');
-      }
-      deferredPrompt = null;
-    });
-  }
-}
-        // Initialize
-        loadItems();
+// Initialize
+loadItems();
     </script>
 </body>
 </html>
